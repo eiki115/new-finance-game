@@ -1,5 +1,4 @@
 let mode = null; // "cash" or "cashless"
-let prMode = false; // 広報モードON/OFF
 let econMode = true; // 経済イベント発生有無(ON/OFF)
 let money = 0; 
 const loan = 100000; 
@@ -82,15 +81,15 @@ const economicEvents = [
         if (mode === "cash") return {moneyChange:-5000};
         else return {};
     }},
-    {name:"増税", desc:"税率上昇(今回固定コストに影響なし)", effect: () => {
+    {name:"増税", desc:"税率上昇(固定コスト影響なし)", effect: () => {
         if (econMode===false) return {};
         return {};
     }},
-    {name:"エネルギー価格下落", desc:"輸送安価(今回固定で影響なし)", effect: () => {
+    {name:"エネルギー価格下落", desc:"輸送安価(固定影響なし)", effect: () => {
         if (econMode===false) return {};
         return {};
     }},
-    {name:"輸入規制強化", desc:"輸入困難(固定コスト影響なし)", effect: () => {
+    {name:"輸入規制強化", desc:"輸入困難(固定影響なし)", effect: () => {
         if (econMode===false) return {};
         return {};
     }},
@@ -105,6 +104,9 @@ window.onload = () => {
     controlsElement = document.getElementById("controls");
     selectedInfoElement = document.getElementById("selected-info");
     historyElement = document.getElementById("history");
+    // 万一モーダルが表示されていたら非表示確実化
+    const modal = document.getElementById("modal");
+    modal.classList.add("hidden");
     initGame();
 };
 
@@ -156,7 +158,7 @@ function showModeSelection() {
     showStatus("モードを選んでください");
 
     const p = document.createElement("p");
-    p.textContent = "支払い方法・経済イベント有無・広報イベント有無を選びます。";
+    p.textContent = "支払い方法(現金/キャッシュレス)と経済イベント有無を選びます。";
     controlsElement.appendChild(p);
 
     // 支払いモード
@@ -181,19 +183,9 @@ function showModeSelection() {
     econLabel.appendChild(econCheck);
     controlsElement.appendChild(econLabel);
 
-    // 広報イベントON/OFF
-    const prLabel = document.createElement("label");
-    prLabel.textContent = "広報モード(売上+10%)：";
-    const prCheck = document.createElement("input");
-    prCheck.type="checkbox";
-    prCheck.checked=false;
-    prLabel.appendChild(prCheck);
-    controlsElement.appendChild(prLabel);
-
     const btnNext = createButton("これでゲームを開始する", () => {
         mode = modeSelect.value;
         econMode = econCheck.checked;
-        prMode = prCheck.checked;
         money = 0;
         money += loan; 
         showStatus("借入100,000円完了。設定終了！");
@@ -361,7 +353,7 @@ function processTurn() {
     sales = Math.floor(sales * weather.multiplier);
 
     if (econ.salesMod) sales += econ.salesMod;
-    if (prMode) sales = Math.floor(sales * 1.1);
+    // 広報モード削除依頼あったため既になし
     if (mode === "cashless") sales = Math.floor(sales * 1.05);
 
     if (sales < 0) sales = 0;
@@ -389,13 +381,10 @@ function processTurn() {
     1皿:${pricePerDish}円`;
     controlsElement.appendChild(info);
 
-    const salesDetailBtn = document.createElement("button");
-    salesDetailBtn.className = "eye-btn";
-    salesDetailBtn.textContent = showSalesDetail ? "売上計算隠す" : "売上計算見る";
-    salesDetailBtn.onclick = () => {
+    const salesDetailBtn = createButton(showSalesDetail ? "売上計算隠す" : "売上計算見る", () => {
         showSalesDetail = !showSalesDetail;
         updateSalesDetail(sales, priceAdjust, weather, econ, salesAmount);
-    };
+    });
     controlsElement.appendChild(salesDetailBtn);
 
     const salesDetailP = document.createElement("p");
@@ -409,8 +398,7 @@ function processTurn() {
             基本皿数:100皿<br>
             価格差調整:${priceAdjust}皿<br>
             天気倍率×${weather.multiplier}<br>
-            経済イベント:${econ.salesMod||0}皿${econMode===false?"(OFFなので影響なし)":""}<br>
-            広報モード:${prMode?"+10%":"なし"}<br>
+            経済イベント:${econ.salesMod||0}皿${econMode===false?"(OFF)":"(ON)"}<br>
             キャッシュレスモード:${mode==="cashless"?"+5%":"なし"}<br><br>
             最終販売数:${sales}皿<br>
             売上= ${sales}皿 × ${pricePerDish}円 = ${salesAmount}円<br>
