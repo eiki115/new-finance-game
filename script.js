@@ -83,8 +83,6 @@ window.onload = () => {
     controlsElement = document.getElementById("controls");
     selectedInfoElement = document.getElementById("selected-info");
     historyElement = document.getElementById("history");
-    const modal = document.getElementById("modal");
-    modal.classList.add("hidden");
     initGame();
 };
 
@@ -139,7 +137,6 @@ function showModeSelection() {
     p.textContent = "現金かキャッシュレスのどちらかを選んでください。";
     controlsElement.appendChild(p);
 
-    // 支払いモード
     const modeLabel = document.createElement("label");
     modeLabel.textContent = "支払いモード：";
     const modeSelect = document.createElement("select");
@@ -313,7 +310,6 @@ function processTurn() {
     const weather = getWeatherEvent(weatherRoll);
     const econ = getEconomicEvent();
 
-    // 販売数計算
     let baseSales = 100;
     let priceDiff = pricePerDish - 500;
     let priceAdjust = Math.floor(priceDiff/100)*(-10);
@@ -479,20 +475,14 @@ function getEconomicEvent() {
     return {name:e.name, desc:e.desc, ...res};
 }
 
+// 閉じるボタンなし、モーダルなしでalertで説明表示
+function showEventDesc(txt) {
+    alert(txt);
+}
+
 function createButton(label, onClick) {
     const btn = document.createElement("button");
     btn.textContent = label;
     btn.onclick = onClick;
     return btn;
-}
-
-function showEventDesc(txt) {
-    const modal = document.getElementById("modal");
-    const modalText = document.getElementById("modal-text");
-    const closeBtn = document.getElementById("modal-close");
-    modal.classList.remove("hidden");
-    modalText.textContent = txt;
-    closeBtn.onclick = () => {
-        modal.classList.add("hidden");
-    }
 }
