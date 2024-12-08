@@ -12,19 +12,32 @@ h1 {
 }
 
 #game-area {
-    max-width: 500px;
+    max-width: 600px;
     margin: 0 auto;
     background: #fffdf5;
     padding: 20px;
     border-radius: 12px;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
     border: 2px solid #f3e9d2;
+    position: relative;
 }
 
 #status {
     font-size: 1.1em;
     margin-bottom: 15px;
     color: #333;
+}
+
+#selected-info {
+    background:#f5f5f5;
+    padding:10px;
+    border-radius:8px;
+    margin-bottom:15px;
+    font-size:14px;
+}
+
+#controls, #history {
+    margin-bottom: 15px;
 }
 
 button {
@@ -37,6 +50,7 @@ button {
     background: #e2f0c2;
     color: #333;
     transition: background 0.3s ease;
+    display:inline-block;
 }
 
 button:hover {
@@ -63,4 +77,67 @@ input[type="number"] {
 #ingredients-list label {
     display: block;
     margin-bottom:5px;
+}
+
+#modal {
+    position: fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background: rgba(0,0,0,0.5);
+    z-index:1000;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+#modal-content {
+    background:#fff;
+    padding:20px;
+    border-radius:8px;
+    max-width:300px;
+    text-align:center;
+}
+
+.eye-btn {
+    background: none;
+    border: none;
+    cursor:pointer;
+    padding:0;
+    margin-left:10px;
+    vertical-align:middle;
+}
+
+.eye-btn img {
+    width:24px;
+    height:24px;
+}
+
+#history {
+    font-size:14px;
+    background:#fafafa;
+    padding:10px;
+    border-radius:8px;
+}
+
+#history h2 {
+    margin-top:0;
+    font-size:16px;
+    color:#333;
+}
+
+#history table {
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
+}
+
+#history th, #history td {
+    border:1px solid #ccc;
+    padding:5px;
+    text-align:center;
+    font-size:13px;
+}
+
+#history th {
+    background:#eee;
 }

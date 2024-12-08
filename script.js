@@ -1,18 +1,24 @@
 let mode = null; // "cash" or "cashless"
-let money = 0; // スタートは借金しているので実質0から開始
-const loan = 100000; // 借入額
-const rent = 10000; // 家賃
-const interest = 1000; // 利子(毎ターン)
-const otherCost = 2000; // 諸費用(毎ターン)
-let turnCount = 0; // 全部で何ターン遊ぶか
+let prMode = false; // 広報モードON/OFF
+let money = 0; 
+const loan = 100000; 
+let interestRate = 1000; // 利子
+let rent = 10000;
+let otherCost = 2000;
+let ingredientCost = 0; 
+let turnCount = 0; 
 let currentTurn = 0; 
-let pricePerDish = 500; // 初期価格(後で変更可能)
-let dishesSold = 0; // 売れた皿数
-let ingredientCost = 0; // 材料費(一度決めたら固定)
-let showMoney = true; // 表示非表示を切り替え
-let controlsElement, statusElement;
+let pricePerDish = 500; 
+let showMoney = true; 
+let showSalesDetail = false;
+let pendingSales = 0;
+let selectedIngredients = [];
 
-// 材料リスト（名前と価格）
+let controlsElement, statusElement, selectedInfoElement, historyElement;
+
+// ターンごとの履歴を記録する配列
+let turnHistory = [];
+
 const ingredients = [
     {name:"お米(400円)", price:400},
     {name:"牛肉 国産(3000円)", price:3000},
@@ -36,53 +42,45 @@ const ingredients = [
     {name:"ピーマン(500円)", price:500}
 ];
 
-// 天気イベント (サイコロで決定)
 const weatherEvents = [
-    {roll:[2], name:"台風", multiplier:0}, //休業
-    {roll:[3], name:"大雨", multiplier:0.5}, 
+    {roll:[2], name:"台風", multiplier:0},
+    {roll:[3], name:"大雨", multiplier:0.5},
     {roll:[4], name:"雨", multiplier:0.7},
     {roll:[5,6], name:"曇り", multiplier:0.9},
     {roll:[7,8,9,10], name:"晴れ", multiplier:1.0},
     {roll:[11,12], name:"快晴", multiplier:1.2}
 ];
 
-// 経済イベント(ランダムピック)
 const economicEvents = [
-    {name:"インフレ", effect: () => { 
-        // 価格高い商品が売れやすい+10皿（500円以上なら+10皿、500円以下なら+0皿）
-        if (pricePerDish > 500) return {salesMod:10}; else return {salesMod:0};
+    {name:"インフレ", desc:"物価上昇で高価格商品が売れやすくなる", effect: (price) => { 
+        if (price > 500) return {salesMod:10};
+        return {};
     }},
-    {name:"デフレ", effect: () => {
-        // 500円以下+20皿、500円より高いと-20皿
-        if (pricePerDish <= 500) return {salesMod:20}; else return {salesMod:-20};
+    {name:"デフレ", desc:"物価下落で安い商品が売れやすく、高い商品が売れにくい", effect: (price) => {
+        if (price <= 500) return {salesMod:20}; else return {salesMod:-20};
     }},
-    {name:"好景気", effect: () => { return {salesMod:30}; }},
-    {name:"不景気", effect: () => {
-        // 500円以下:+10皿、500円超え:-10皿
-        if (pricePerDish <= 500) return {salesMod:10}; else return {salesMod:-10};
+    {name:"好景気", desc:"経済好調で多くの人が買い物をする", effect: () => { return {salesMod:30}; }},
+    {name:"不景気", desc:"経済不調で節約ムード", effect: (price) => {
+        if (price <= 500) return {salesMod:10}; else return {salesMod:-10};
     }},
-    {name:"ハッカー(キャッシュレスだとダメージ)", effect: () => {
+    {name:"ハッカー", desc:"キャッシュレス決済システムへの攻撃", effect: () => {
         if (mode === "cashless") return {moneyChange:-20000}; 
         else return {}; 
     }},
-    {name:"どろぼう(現金だとダメージ)", effect: () => {
+    {name:"どろぼう", desc:"現金が盗まれる", effect: () => {
         if (mode === "cash") return {moneyChange:-5000};
         else return {};
     }},
-    {name:"増税", effect: () => {
-        // 材料費+500、家賃+500
+    {name:"増税", desc:"税率上昇で家賃や材料費アップ", effect: () => {
         return {rentUp:500, ingredientUp:500};
     }},
-    {name:"エネルギー価格下落", effect: () => {
-        // 材料費-1000
+    {name:"エネルギー価格下落", desc:"輸送コスト減、材料費ダウン", effect: () => {
         return {ingredientUp:-1000};
     }},
-    {name:"輸入規制強化", effect: () => {
-        // 材料費+2000
+    {name:"輸入規制強化", desc:"海外材料が高騰", effect: () => {
         return {ingredientUp:2000};
     }},
-    {name:"SNSでバズる", effect: () => {
-        // +20皿売れる
+    {name:"SNSでバズる", desc:"評判が広がり客増", effect: () => {
         return {salesMod:20};
     }}
 ];
@@ -90,6 +88,8 @@ const economicEvents = [
 window.onload = () => {
     statusElement = document.getElementById("status");
     controlsElement = document.getElementById("controls");
+    selectedInfoElement = document.getElementById("selected-info");
+    historyElement = document.getElementById("history");
     initGame();
 };
 
@@ -105,42 +105,66 @@ function showStatus(msg) {
 
 function showModeSelection() {
     controlsElement.innerHTML = "";
-    showStatus("まずは支払い方法を選んでください。");
+    showStatus("はじめにモードを選んでください。");
 
     const p = document.createElement("p");
-    p.textContent = "どちらでお客さんからお金を受け取りますか？";
+    p.textContent = "以下の設定を選んでゲーム開始します。";
     controlsElement.appendChild(p);
 
-    const btnCash = createButton("現金モード(入金即時・手数料なし)", () => {
-        mode = "cash";
-        money = 0; // 借入(100,000円)を受け取る
-        money += loan; 
-        showStatus("現金モードでスタート！ 100,000円借りました。");
-        showTurnCountSelection();
-    });
-    const btnCashless = createButton("キャッシュレスモード(翌月入金・5%手数料)", () => {
-        mode = "cashless";
-        money = 0; // 借入(100,000円)を受け取る
-        money += loan;
-        showStatus("キャッシュレスモードでスタート！ 100,000円借りました。");
-        showTurnCountSelection();
-    });
+    // 現金・キャッシュレス選択
+    const modeLabel = document.createElement("label");
+    modeLabel.textContent = "支払いモード：";
+    const modeSelect = document.createElement("select");
+    const optCash = document.createElement("option");
+    optCash.value="cash"; optCash.text="現金";
+    const optCashless = document.createElement("option");
+    optCashless.value="cashless"; optCashless.text="キャッシュレス";
+    modeSelect.appendChild(optCash);
+    modeSelect.appendChild(optCashless);
+    modeLabel.appendChild(modeSelect);
+    controlsElement.appendChild(modeLabel);
 
-    controlsElement.appendChild(btnCash);
-    controlsElement.appendChild(btnCashless);
+    // 広報モード
+    const prLabel = document.createElement("label");
+    prLabel.textContent = "広報モード(売上+10%)：";
+    const prCheck = document.createElement("input");
+    prCheck.type="checkbox";
+    prLabel.appendChild(prCheck);
+    controlsElement.appendChild(prLabel);
+
+    // 利子設定
+    const interestLabel = document.createElement("label");
+    interestLabel.textContent = "利子(元々1000円+入力値)：";
+    const interestInput = document.createElement("input");
+    interestInput.type="number";
+    interestInput.value=1000; //デフォルト1000円
+    interestLabel.appendChild(interestInput);
+    controlsElement.appendChild(interestLabel);
+
+    const btnNext = createButton("決定", () => {
+        mode = modeSelect.value;
+        prMode = prCheck.checked;
+        interestRate = parseInt(interestInput.value);
+        money = 0;
+        money += loan; 
+        showStatus("借入100,000円完了。モード設定完了。");
+        showTurnCountSelection();
+    });
+    controlsElement.appendChild(btnNext);
 }
 
 function showTurnCountSelection() {
     controlsElement.innerHTML = "";
     showStatus("何ターン遊びますか？");
+
     const p = document.createElement("p");
-    p.textContent = "1ターンは、費用支払い→天気決定→経済イベント→販売です。";
+    p.textContent = "1ターン：費用支払い→天気→経済イベント→販売→(キャッシュレスは次ターン入金)";
     controlsElement.appendChild(p);
 
     const input = document.createElement("input");
     input.type = "number";
     input.min = 1;
-    input.value = 5; //デフォルト5ターン
+    input.value = 5;
     const label = document.createElement("label");
     label.textContent = "ターン数：";
     label.appendChild(input);
@@ -157,17 +181,19 @@ function showTurnCountSelection() {
 function showIngredientSelection() {
     controlsElement.innerHTML = "";
     showStatus("材料を選んでください。(合計1万円以内)");
+
     const p = document.createElement("p");
-    p.textContent = "使いたい材料にチェックしてください。合計金額1万円以内で選んでください。";
+    p.textContent = "使いたい材料にチェックしてください。合計10,000円以内";
     controlsElement.appendChild(p);
 
     const div = document.createElement("div");
     div.id="ingredients-list";
-    ingredients.forEach((ing, idx) => {
+    ingredients.forEach((ing) => {
         const lbl = document.createElement("label");
         const chk = document.createElement("input");
         chk.type = "checkbox";
         chk.value = ing.price;
+        chk.dataset.name = ing.name;
         chk.onchange = updateIngredientTotal;
         lbl.appendChild(chk);
         lbl.appendChild(document.createTextNode(ing.name));
@@ -194,8 +220,12 @@ function showIngredientSelection() {
     function updateIngredientTotal() {
         const checks = div.querySelectorAll("input[type=checkbox]");
         let sum = 0;
+        selectedIngredients = [];
         checks.forEach(c => {
-            if(c.checked) sum += parseInt(c.value);
+            if(c.checked) {
+                sum += parseInt(c.value);
+                selectedIngredients.push(c.dataset.name);
+            }
         });
         ingredientCost = sum;
         totalP.textContent = "合計: " + sum + "円";
@@ -207,7 +237,7 @@ function showPriceSelection() {
     showStatus("価格を決めてください。(300円～800円)");
 
     const p = document.createElement("p");
-    p.textContent = "1皿あたりの販売価格を決めてください。(初期は500円)";
+    p.textContent = "1皿あたりの販売価格を入力(初期500円)";
     controlsElement.appendChild(p);
 
     const input = document.createElement("input");
@@ -235,6 +265,10 @@ function showPriceSelection() {
 
 function startGame() {
     currentTurn = 0;
+    pendingSales = 0;
+    turnHistory = [];
+    updateSelectedInfo();  
+    renderHistory();
     nextTurn();
 }
 
@@ -249,106 +283,109 @@ function nextTurn() {
 
 function processTurn() {
     controlsElement.innerHTML = "";
-    showStatus(currentTurn + "ターン目！");
+    showStatus(`${currentTurn}ターン目です。`);
 
-    // 1. 費用支払い(材料費は初回のみ)
     let cost = 0;
     if (currentTurn === 1) cost += ingredientCost;
+    let thisTurnInterest = interestRate; 
     cost += rent;
-    cost += interest;
+    cost += thisTurnInterest;
     cost += otherCost;
 
-    // キャッシュレスの場合、売上は前ターンの売上があれば5%手数料引きで入金、だが簡略化するため
-    // 本ゲームは即時売上計上＋翌月入金を再現せず、手数料をここで単純化することもできるが、
-    // 指示に忠実に、キャッシュレスは入金遅れを表現するため、ここでは売上獲得を遅らせる仕組みを入れる
-    // しかし要望には「翌月入金」とあるので、ターンが短い中で実装が複雑になる。
-    // 簡易対応として以下ルール:
-    // キャッシュレスの場合、今ターンで得た売上は次のターン開始時に入る、として売上をバッファに貯める
-    // 5%引いて入れる仕組みを実装する
-    if (mode === "cashless") {
-        // 前ターンで貯めた売上を今反映
+    if (mode === "cashless" && currentTurn > 1) {
         money += Math.floor(pendingSales * 0.95);
         pendingSales = 0;
     }
 
-    // 支払い実行
     money -= cost;
 
-    // 2. 天気決定
     const weatherRoll = rollDice(2);
     const weather = getWeatherEvent(weatherRoll);
-    // 3. 経済イベント
     const econ = getEconomicEvent();
 
-    // 販売数計算(標準は100皿、価格によって変動)
-    // 簡易ルール：標準100皿販売
-    // 価格高いほど売れにくくしたいが、経済イベントですでに調整しているので一旦そのまま
+    // 販売数計算
+    // 基本100皿
+    // priceDiff = (pricePerDish - 500), 100円増で-10皿、100円減で+10皿
     let baseSales = 100;
-    // 価格による調整：たとえば500円標準。100円上がるごとに-10皿、100円下がるごとに+10皿(簡易)
     let priceDiff = pricePerDish - 500;
     let priceAdjust = Math.floor(priceDiff/100)*(-10);
-    // 天気による倍率
-    let sales = Math.floor((baseSales + priceAdjust) * weather.multiplier);
-
-    // 経済イベントによる調整
+    let sales = baseSales + priceAdjust;
+    sales = Math.floor(sales * weather.multiplier);
     if (econ.salesMod) sales += econ.salesMod;
-
+    if (prMode) sales = Math.floor(sales * 1.1);
     if (sales < 0) sales = 0;
 
-    // 売上計算
     let salesAmount = sales * pricePerDish;
-
-    // キャッシュレスの場合、売上は即入らずpending
     if (mode === "cash") {
         money += salesAmount;
     } else {
-        // 来ターンに入金
-        pendingSales = salesAmount;
+        pendingSales += salesAmount;
     }
 
-    // 経済イベントによるお金の増減
     if (econ.moneyChange) {
         money += econ.moneyChange;
     }
 
-    // 増税や輸入規制によるコスト上昇を今後のターンに反映するため、
-    // ingredientCostやrentを上げる対応
     if (econ.ingredientUp) {
         ingredientCost += econ.ingredientUp;
-        if (ingredientCost < 0) ingredientCost = 0; 
+        if (ingredientCost<0) ingredientCost=0;
     }
     if (econ.rentUp) {
-        // 次ターン以降家賃値上げ
         rent += econ.rentUp;
     }
 
-    // 表示領域
     const info = document.createElement("p");
-    info.innerHTML = `<strong>${currentTurn}ターン目の結果</strong><br>
-    天気: ${weather.name}<br>
-    経済イベント: ${econ.name}<br>
-    今回支払い合計: ${cost}円<br>
-    販売皿数: ${sales}皿<br>
-    売上: ${salesAmount}円(${mode==="cashless"?"※次ターン入金(5%手数料後)":"即時入金"})<br>
-    `;
+    info.innerHTML = `<strong>${currentTurn}ターン結果</strong><br>
+    ●支払い合計: ${cost}円<br>
+    (内訳:材料費(${currentTurn===1?ingredientCost:0}円)+家賃(${rent-(econ.rentUp||0)}円)+利子(${thisTurnInterest}円)+諸費用(${otherCost}円))<br>
+    ●天気: ${weather.name}(倍率:${weather.multiplier})<br>
+    ●経済イベント: ${econ.name} <button onclick="showEventDesc('${econ.desc}')">説明</button><br>
+    ●販売皿数:${sales}皿`;
     controlsElement.appendChild(info);
 
-    // 表示/非表示ボタン
-    const toggleBtn = createButton(showMoney ? "残金を隠す" : "残金を表示", () => {
-        showMoney = !showMoney;
-        showStatus(`${currentTurn}ターン目が終わりました`);
-    });
-    controlsElement.appendChild(toggleBtn);
+    const salesDetailBtn = document.createElement("button");
+    salesDetailBtn.className = "eye-btn";
+    salesDetailBtn.textContent = showSalesDetail ? "売上計算隠す" : "売上計算見る";
+    salesDetailBtn.onclick = () => {
+        showSalesDetail = !showSalesDetail;
+        updateSalesDetail(sales, priceAdjust, weather, econ, salesAmount);
+    };
+    controlsElement.appendChild(salesDetailBtn);
 
-    // 次のターンへ
+    const salesDetailP = document.createElement("p");
+    salesDetailP.id = "sales-detail";
+    controlsElement.appendChild(salesDetailP);
+    updateSalesDetail(sales, priceAdjust, weather, econ, salesAmount);
+
+    function updateSalesDetail(sales, priceAdjust, weather, econ, salesAmount) {
+        if (showSalesDetail) {
+            salesDetailP.innerHTML = `売上計算式:<br>
+            基本100皿 + 価格差調整(${priceAdjust}皿) = ${100+priceAdjust}皿<br>
+            天気倍率 ×${weather.multiplier}<br>
+            経済イベント調整:${econ.salesMod||0}皿<br>
+            広報モード:${prMode?"+10%": "なし"}<br>
+            最終販売数:${sales}皿<br>
+            売上= ${sales}皿 × ${pricePerDish}円 = ${salesAmount}円<br>
+            ${mode==="cash"?"(即時入金)":"(次ターン入金,5%手数料後)"}`;
+        } else {
+            salesDetailP.textContent = "";
+        }
+    }
+
+    const toggleMoneyBtn = createButton(showMoney ? "残金を隠す" : "残金を表示", () => {
+        showMoney = !showMoney;
+        showStatus(`${currentTurn}ターン終了`);
+    });
+    controlsElement.appendChild(toggleMoneyBtn);
+
     const nextBtn = createButton(currentTurn<turnCount?"次のターンへ":"結果を見る", () => {
+        // ターン履歴記録
+        recordTurnHistory(currentTurn, weather, econ, sales, salesAmount, money);
+        renderHistory();
         nextTurn();
     });
     controlsElement.appendChild(nextBtn);
 }
-
-// キャッシュレス用の売上バッファ
-let pendingSales = 0;
 
 function endGame() {
     controlsElement.innerHTML = "";
@@ -358,13 +395,68 @@ function endGame() {
     controlsElement.appendChild(p);
 }
 
-// 天気を決める
+function updateSelectedInfo() {
+    selectedInfoElement.classList.remove("hidden");
+    selectedInfoElement.innerHTML = `<strong>選択した材料:</strong><br>${selectedIngredients.join(", ")}<br>
+    材料合計:${ingredientCost}円 / 1皿:${pricePerDish}円`;
+}
+
+function recordTurnHistory(turn, weather, econ, sales, salesAmount, moneyEnd) {
+    turnHistory.push({
+        turn: turn,
+        weather: weather.name,
+        event: econ.name,
+        sales: sales,
+        revenue: salesAmount,
+        moneyEnd: moneyEnd
+    });
+}
+
+function renderHistory() {
+    historyElement.innerHTML = "";
+    if (turnHistory.length > 0) {
+        const h2 = document.createElement("h2");
+        h2.textContent = "ターン履歴";
+        historyElement.appendChild(h2);
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const trh = document.createElement("tr");
+        ["ターン","天気","イベント","販売数","売上","残金"].forEach(hd => {
+            const th = document.createElement("th");
+            th.textContent = hd;
+            trh.appendChild(th);
+        });
+        thead.appendChild(trh);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        turnHistory.forEach(h => {
+            const tr = document.createElement("tr");
+            const tdTurn = document.createElement("td");tdTurn.textContent=h.turn;
+            const tdWeather = document.createElement("td");tdWeather.textContent=h.weather;
+            const tdEvent = document.createElement("td");tdEvent.textContent=h.event;
+            const tdSales = document.createElement("td");tdSales.textContent=h.sales;
+            const tdRevenue = document.createElement("td");tdRevenue.textContent=h.revenue;
+            const tdMoney = document.createElement("td");tdMoney.textContent=h.moneyEnd;
+            tr.appendChild(tdTurn);
+            tr.appendChild(tdWeather);
+            tr.appendChild(tdEvent);
+            tr.appendChild(tdSales);
+            tr.appendChild(tdRevenue);
+            tr.appendChild(tdMoney);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        historyElement.appendChild(table);
+    }
+}
+
 function getWeatherEvent(rollSum) {
     for (let w of weatherEvents) {
         if (w.roll.includes(rollSum)) {
             return w;
         }
-        // たとえば5,6が曇りのように複数値の場合、includesで判定
     }
     return {name:"晴れ", multiplier:1.0};
 }
@@ -377,12 +469,11 @@ function rollDice(count) {
     return sum;
 }
 
-// 経済イベントランダム取得
 function getEconomicEvent() {
     const e = economicEvents[Math.floor(Math.random()*economicEvents.length)];
-    let res = e.effect();
+    let res = e.effect(pricePerDish);
     if(!res) res = {};
-    return {name:e.name, ...res};
+    return {name:e.name, desc:e.desc, ...res};
 }
 
 function createButton(label, onClick) {
@@ -390,4 +481,15 @@ function createButton(label, onClick) {
     btn.textContent = label;
     btn.onclick = onClick;
     return btn;
+}
+
+function showEventDesc(txt) {
+    const modal = document.getElementById("modal");
+    const modalText = document.getElementById("modal-text");
+    const closeBtn = document.getElementById("modal-close");
+    modal.classList.remove("hidden");
+    modalText.textContent = txt;
+    closeBtn.onclick = () => {
+        modal.classList.add("hidden");
+    }
 }
