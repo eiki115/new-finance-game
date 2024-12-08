@@ -104,9 +104,8 @@ window.onload = () => {
     controlsElement = document.getElementById("controls");
     selectedInfoElement = document.getElementById("selected-info");
     historyElement = document.getElementById("history");
-    // 万一モーダルが表示されていたら非表示確実化
     const modal = document.getElementById("modal");
-    modal.classList.add("hidden");
+    modal.classList.add("hidden"); // 念のため再設定
     initGame();
 };
 
@@ -179,7 +178,7 @@ function showModeSelection() {
     econLabel.textContent = "経済イベントモード：";
     const econCheck = document.createElement("input");
     econCheck.type="checkbox";
-    econCheck.checked = true; // デフォルトON
+    econCheck.checked = true;
     econLabel.appendChild(econCheck);
     controlsElement.appendChild(econLabel);
 
@@ -353,7 +352,6 @@ function processTurn() {
     sales = Math.floor(sales * weather.multiplier);
 
     if (econ.salesMod) sales += econ.salesMod;
-    // 広報モード削除依頼あったため既になし
     if (mode === "cashless") sales = Math.floor(sales * 1.05);
 
     if (sales < 0) sales = 0;
