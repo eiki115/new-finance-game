@@ -1,5 +1,4 @@
 let mode = null; // "cash" or "cashless"
-let econMode = true; // 経済イベント発生有無(ON/OFF)
 let money = 0; 
 const loan = 100000; 
 let turnCount = 0; 
@@ -55,48 +54,28 @@ const weatherEvents = [
 
 const economicEvents = [
     {name:"インフレ", desc:"物価上昇で高価格商品が売れやすくなる", effect: (price) => { 
-        if (econMode===false) return {};
         if (price > 500) return {salesMod:10};
         return {};
     }},
     {name:"デフレ", desc:"物価下落で安価商品がさらに売れる", effect: (price) => {
-        if (econMode===false) return {};
         if (price <= 500) return {salesMod:20}; else return {salesMod:-20};
     }},
-    {name:"好景気", desc:"経済好調で客増", effect: (price) => {
-        if (econMode===false) return {};
-        return {salesMod:30}; 
-    }},
+    {name:"好景気", desc:"経済好調で客増", effect: (price) => {return {salesMod:30};}},
     {name:"不景気", desc:"経済不調で客減", effect: (price) => {
-        if (econMode===false) return {};
         if (price <= 500) return {salesMod:10}; else return {salesMod:-10};
     }},
     {name:"ハッカー", desc:"キャッシュレス決済攻撃", effect: () => {
-        if (econMode===false) return {};
         if (mode === "cashless") return {moneyChange:-20000}; 
         else return {}; 
     }},
     {name:"どろぼう", desc:"現金盗難", effect: () => {
-        if (econMode===false) return {};
         if (mode === "cash") return {moneyChange:-5000};
         else return {};
     }},
-    {name:"増税", desc:"税率上昇(固定コスト影響なし)", effect: () => {
-        if (econMode===false) return {};
-        return {};
-    }},
-    {name:"エネルギー価格下落", desc:"輸送安価(固定影響なし)", effect: () => {
-        if (econMode===false) return {};
-        return {};
-    }},
-    {name:"輸入規制強化", desc:"輸入困難(固定影響なし)", effect: () => {
-        if (econMode===false) return {};
-        return {};
-    }},
-    {name:"SNSでバズる", desc:"評判UPで客増", effect: () => {
-        if (econMode===false) return {};
-        return {salesMod:20};
-    }}
+    {name:"増税", desc:"税率上昇(固定コスト影響なし)", effect: () => {return {};}},
+    {name:"エネルギー価格下落", desc:"輸送安価(固定影響なし)", effect: () => {return {};}},
+    {name:"輸入規制強化", desc:"輸入困難(固定影響なし)", effect: () => {return {};}},
+    {name:"SNSでバズる", desc:"評判UPで客増", effect: () => {return {salesMod:20};}}
 ];
 
 window.onload = () => {
@@ -105,7 +84,7 @@ window.onload = () => {
     selectedInfoElement = document.getElementById("selected-info");
     historyElement = document.getElementById("history");
     const modal = document.getElementById("modal");
-    modal.classList.add("hidden"); // 念のため再設定
+    modal.classList.add("hidden");
     initGame();
 };
 
@@ -154,10 +133,10 @@ function showEconomicInfo() {
 
 function showModeSelection() {
     controlsElement.innerHTML = "";
-    showStatus("モードを選んでください");
+    showStatus("支払いモードを選んでください");
 
     const p = document.createElement("p");
-    p.textContent = "支払い方法(現金/キャッシュレス)と経済イベント有無を選びます。";
+    p.textContent = "現金かキャッシュレスのどちらかを選んでください。";
     controlsElement.appendChild(p);
 
     // 支払いモード
@@ -173,18 +152,8 @@ function showModeSelection() {
     modeLabel.appendChild(modeSelect);
     controlsElement.appendChild(modeLabel);
 
-    // 経済イベントON/OFF
-    const econLabel = document.createElement("label");
-    econLabel.textContent = "経済イベントモード：";
-    const econCheck = document.createElement("input");
-    econCheck.type="checkbox";
-    econCheck.checked = true;
-    econLabel.appendChild(econCheck);
-    controlsElement.appendChild(econLabel);
-
     const btnNext = createButton("これでゲームを開始する", () => {
         mode = modeSelect.value;
-        econMode = econCheck.checked;
         money = 0;
         money += loan; 
         showStatus("借入100,000円完了。設定終了！");
@@ -396,7 +365,7 @@ function processTurn() {
             基本皿数:100皿<br>
             価格差調整:${priceAdjust}皿<br>
             天気倍率×${weather.multiplier}<br>
-            経済イベント:${econ.salesMod||0}皿${econMode===false?"(OFF)":"(ON)"}<br>
+            経済イベント:${econ.salesMod||0}皿<br>
             キャッシュレスモード:${mode==="cashless"?"+5%":"なし"}<br><br>
             最終販売数:${sales}皿<br>
             売上= ${sales}皿 × ${pricePerDish}円 = ${salesAmount}円<br>
