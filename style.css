@@ -1,0 +1,66 @@
+body {
+    font-family: "Hiragino Kaku Gothic ProN", sans-serif;
+    margin: 20px;
+    background: #f9f7f1;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    font-size: 1.5em;
+    margin-bottom: 20px;
+}
+
+#game-area {
+    max-width: 500px;
+    margin: 0 auto;
+    background: #fffdf5;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    border: 2px solid #f3e9d2;
+}
+
+#status {
+    font-size: 1.1em;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+button {
+    margin: 10px 5px 0 0;
+    padding: 10px 15px;
+    font-size: 1em;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #e2f0c2;
+    color: #333;
+    transition: background 0.3s ease;
+}
+
+button:hover {
+    background: #d2e8a8;
+}
+
+p, label {
+    margin-bottom: 10px;
+    line-height: 1.4;
+    color: #444;
+    font-size: 14px;
+}
+
+input[type="number"] {
+    width:60px;
+    font-size:14px;
+    margin-left:5px;
+}
+
+.hidden {
+    display:none;
+}
+
+#ingredients-list label {
+    display: block;
+    margin-bottom:5px;
+}
