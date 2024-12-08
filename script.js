@@ -1,11 +1,8 @@
 let mode = null; // "cash" or "cashless"
 let prMode = false; // 広報モードON/OFF
+let econMode = true; // 経済イベント発生有無(ON/OFF)
 let money = 0; 
 const loan = 100000; 
-let interestRate = 1000; // 利子
-let rent = 10000;
-let otherCost = 2000;
-let ingredientCost = 0; 
 let turnCount = 0; 
 let currentTurn = 0; 
 let pricePerDish = 500; 
@@ -14,13 +11,19 @@ let showSalesDetail = false;
 let pendingSales = 0;
 let selectedIngredients = [];
 
-let controlsElement, statusElement, selectedInfoElement, historyElement;
+// コスト定義
+const MATERIAL_COST = 10000; 
+const RENT = 10000;          
+const REPAY = 10000;         
+const INTEREST = 1000;       
+const OTHER_COST = 2000;     
 
-// ターンごとの履歴を記録する配列
+let controlsElement, statusElement, selectedInfoElement, historyElement;
 let turnHistory = [];
 
+// お米4000円
 const ingredients = [
-    {name:"お米(400円)", price:400},
+    {name:"お米(4000円)", price:4000},
     {name:"牛肉 国産(3000円)", price:3000},
     {name:"牛肉 外国産(2500円)", price:2500},
     {name:"なす(500円)", price:500},
@@ -43,44 +46,56 @@ const ingredients = [
 ];
 
 const weatherEvents = [
-    {roll:[2], name:"台風", multiplier:0},
-    {roll:[3], name:"大雨", multiplier:0.5},
-    {roll:[4], name:"雨", multiplier:0.7},
-    {roll:[5,6], name:"曇り", multiplier:0.9},
-    {roll:[7,8,9,10], name:"晴れ", multiplier:1.0},
-    {roll:[11,12], name:"快晴", multiplier:1.2}
+    {roll:[2], name:"台風", desc:"休業(売上0)", multiplier:0},
+    {roll:[3], name:"大雨", desc:"売上半減", multiplier:0.5},
+    {roll:[4], name:"雨", desc:"少し来客減", multiplier:0.7},
+    {roll:[5,6], name:"曇り", desc:"やや来客減", multiplier:0.9},
+    {roll:[7,8,9,10], name:"晴れ", desc:"普通", multiplier:1.0},
+    {roll:[11,12], name:"快晴", desc:"来客増", multiplier:1.2}
 ];
 
 const economicEvents = [
     {name:"インフレ", desc:"物価上昇で高価格商品が売れやすくなる", effect: (price) => { 
+        if (econMode===false) return {};
         if (price > 500) return {salesMod:10};
         return {};
     }},
-    {name:"デフレ", desc:"物価下落で安い商品が売れやすく、高い商品が売れにくい", effect: (price) => {
+    {name:"デフレ", desc:"物価下落で安価商品がさらに売れる", effect: (price) => {
+        if (econMode===false) return {};
         if (price <= 500) return {salesMod:20}; else return {salesMod:-20};
     }},
-    {name:"好景気", desc:"経済好調で多くの人が買い物をする", effect: () => { return {salesMod:30}; }},
-    {name:"不景気", desc:"経済不調で節約ムード", effect: (price) => {
+    {name:"好景気", desc:"経済好調で客増", effect: (price) => {
+        if (econMode===false) return {};
+        return {salesMod:30}; 
+    }},
+    {name:"不景気", desc:"経済不調で客減", effect: (price) => {
+        if (econMode===false) return {};
         if (price <= 500) return {salesMod:10}; else return {salesMod:-10};
     }},
-    {name:"ハッカー", desc:"キャッシュレス決済システムへの攻撃", effect: () => {
+    {name:"ハッカー", desc:"キャッシュレス決済攻撃", effect: () => {
+        if (econMode===false) return {};
         if (mode === "cashless") return {moneyChange:-20000}; 
         else return {}; 
     }},
-    {name:"どろぼう", desc:"現金が盗まれる", effect: () => {
+    {name:"どろぼう", desc:"現金盗難", effect: () => {
+        if (econMode===false) return {};
         if (mode === "cash") return {moneyChange:-5000};
         else return {};
     }},
-    {name:"増税", desc:"税率上昇で家賃や材料費アップ", effect: () => {
-        return {rentUp:500, ingredientUp:500};
+    {name:"増税", desc:"税率上昇(今回固定コストに影響なし)", effect: () => {
+        if (econMode===false) return {};
+        return {};
     }},
-    {name:"エネルギー価格下落", desc:"輸送コスト減、材料費ダウン", effect: () => {
-        return {ingredientUp:-1000};
+    {name:"エネルギー価格下落", desc:"輸送安価(今回固定で影響なし)", effect: () => {
+        if (econMode===false) return {};
+        return {};
     }},
-    {name:"輸入規制強化", desc:"海外材料が高騰", effect: () => {
-        return {ingredientUp:2000};
+    {name:"輸入規制強化", desc:"輸入困難(固定コスト影響なし)", effect: () => {
+        if (econMode===false) return {};
+        return {};
     }},
-    {name:"SNSでバズる", desc:"評判が広がり客増", effect: () => {
+    {name:"SNSでバズる", desc:"評判UPで客増", effect: () => {
+        if (econMode===false) return {};
         return {salesMod:20};
     }}
 ];
@@ -94,24 +109,57 @@ window.onload = () => {
 };
 
 function initGame() {
-    showStatus("いらっしゃいませ！カレー屋さんを経営しましょう。");
-    showModeSelection();
+    showStatus("まずは天気イベントを確認しましょう");
+    showWeatherInfo();
 }
 
-function showStatus(msg) {
-    let dispMoney = showMoney ? `残金: ${money}円` : "残金: ???円";
-    statusElement.textContent = dispMoney + " | " + msg;
+function showWeatherInfo() {
+    controlsElement.innerHTML = "";
+    const p = document.createElement("p");
+    p.textContent = "【天気イベント一覧】";
+    controlsElement.appendChild(p);
+
+    weatherEvents.forEach(w=>{
+        const wP = document.createElement("p");
+        wP.textContent = `${w.name}: ${w.desc}`;
+        controlsElement.appendChild(wP);
+    });
+
+    const btn = createButton("確認した", ()=> {
+        showStatus("次は経済イベントを確認しましょう");
+        showEconomicInfo();
+    });
+    controlsElement.appendChild(btn);
+}
+
+function showEconomicInfo() {
+    controlsElement.innerHTML = "";
+    const p = document.createElement("p");
+    p.textContent = "【経済イベント一覧】";
+    controlsElement.appendChild(p);
+
+    economicEvents.forEach(e=>{
+        const eP = document.createElement("p");
+        eP.textContent = `${e.name}: ${e.desc}`;
+        controlsElement.appendChild(eP);
+    });
+
+    const btn = createButton("確認した", ()=> {
+        showStatus("次はモードを選びましょう");
+        showModeSelection();
+    });
+    controlsElement.appendChild(btn);
 }
 
 function showModeSelection() {
     controlsElement.innerHTML = "";
-    showStatus("はじめにモードを選んでください。");
+    showStatus("モードを選んでください");
 
     const p = document.createElement("p");
-    p.textContent = "以下の設定を選んでゲーム開始します。";
+    p.textContent = "支払い方法・経済イベント有無・広報イベント有無を選びます。";
     controlsElement.appendChild(p);
 
-    // 現金・キャッシュレス選択
+    // 支払いモード
     const modeLabel = document.createElement("label");
     modeLabel.textContent = "支払いモード：";
     const modeSelect = document.createElement("select");
@@ -124,30 +172,31 @@ function showModeSelection() {
     modeLabel.appendChild(modeSelect);
     controlsElement.appendChild(modeLabel);
 
-    // 広報モード
+    // 経済イベントON/OFF
+    const econLabel = document.createElement("label");
+    econLabel.textContent = "経済イベントモード：";
+    const econCheck = document.createElement("input");
+    econCheck.type="checkbox";
+    econCheck.checked = true; // デフォルトON
+    econLabel.appendChild(econCheck);
+    controlsElement.appendChild(econLabel);
+
+    // 広報イベントON/OFF
     const prLabel = document.createElement("label");
     prLabel.textContent = "広報モード(売上+10%)：";
     const prCheck = document.createElement("input");
     prCheck.type="checkbox";
+    prCheck.checked=false;
     prLabel.appendChild(prCheck);
     controlsElement.appendChild(prLabel);
 
-    // 利子設定
-    const interestLabel = document.createElement("label");
-    interestLabel.textContent = "利子(元々1000円+入力値)：";
-    const interestInput = document.createElement("input");
-    interestInput.type="number";
-    interestInput.value=1000; //デフォルト1000円
-    interestLabel.appendChild(interestInput);
-    controlsElement.appendChild(interestLabel);
-
-    const btnNext = createButton("決定", () => {
+    const btnNext = createButton("これでゲームを開始する", () => {
         mode = modeSelect.value;
+        econMode = econCheck.checked;
         prMode = prCheck.checked;
-        interestRate = parseInt(interestInput.value);
         money = 0;
         money += loan; 
-        showStatus("借入100,000円完了。モード設定完了。");
+        showStatus("借入100,000円完了。設定終了！");
         showTurnCountSelection();
     });
     controlsElement.appendChild(btnNext);
@@ -156,7 +205,6 @@ function showModeSelection() {
 function showTurnCountSelection() {
     controlsElement.innerHTML = "";
     showStatus("何ターン遊びますか？");
-
     const p = document.createElement("p");
     p.textContent = "1ターン：費用支払い→天気→経済イベント→販売→(キャッシュレスは次ターン入金)";
     controlsElement.appendChild(p);
@@ -188,6 +236,7 @@ function showIngredientSelection() {
 
     const div = document.createElement("div");
     div.id="ingredients-list";
+    let ingredientCostSum = 0;
     ingredients.forEach((ing) => {
         const lbl = document.createElement("label");
         const chk = document.createElement("input");
@@ -207,11 +256,12 @@ function showIngredientSelection() {
     controlsElement.appendChild(totalP);
 
     const btnNext = createButton("決定", () => {
-        if (ingredientCost > 10000) {
+        if (ingredientCostSum > 10000) {
             showStatus("1万円以内におさえてください。");
-        } else if (ingredientCost === 0) {
+        } else if (ingredientCostSum === 0) {
             showStatus("材料がゼロです。少なくとも1つは選んでください。");
         } else {
+            updateSelectedInfo();
             showPriceSelection();
         }
     });
@@ -227,7 +277,7 @@ function showIngredientSelection() {
                 selectedIngredients.push(c.dataset.name);
             }
         });
-        ingredientCost = sum;
+        ingredientCostSum = sum;
         totalP.textContent = "合計: " + sum + "円";
     }
 }
@@ -285,12 +335,12 @@ function processTurn() {
     controlsElement.innerHTML = "";
     showStatus(`${currentTurn}ターン目です。`);
 
-    let cost = 0;
-    if (currentTurn === 1) cost += ingredientCost;
-    let thisTurnInterest = interestRate; 
-    cost += rent;
-    cost += thisTurnInterest;
-    cost += otherCost;
+    let mat = (currentTurn===1)?MATERIAL_COST:0;
+    let rentCost = RENT;
+    let repay = REPAY; 
+    let inter = INTEREST; 
+    let other = OTHER_COST;
+    let cost = mat + rentCost + repay + inter + other;
 
     if (mode === "cashless" && currentTurn > 1) {
         money += Math.floor(pendingSales * 0.95);
@@ -304,15 +354,16 @@ function processTurn() {
     const econ = getEconomicEvent();
 
     // 販売数計算
-    // 基本100皿
-    // priceDiff = (pricePerDish - 500), 100円増で-10皿、100円減で+10皿
     let baseSales = 100;
     let priceDiff = pricePerDish - 500;
     let priceAdjust = Math.floor(priceDiff/100)*(-10);
     let sales = baseSales + priceAdjust;
     sales = Math.floor(sales * weather.multiplier);
+
     if (econ.salesMod) sales += econ.salesMod;
     if (prMode) sales = Math.floor(sales * 1.1);
+    if (mode === "cashless") sales = Math.floor(sales * 1.05);
+
     if (sales < 0) sales = 0;
 
     let salesAmount = sales * pricePerDish;
@@ -326,21 +377,16 @@ function processTurn() {
         money += econ.moneyChange;
     }
 
-    if (econ.ingredientUp) {
-        ingredientCost += econ.ingredientUp;
-        if (ingredientCost<0) ingredientCost=0;
-    }
-    if (econ.rentUp) {
-        rent += econ.rentUp;
-    }
-
     const info = document.createElement("p");
-    info.innerHTML = `<strong>${currentTurn}ターン結果</strong><br>
-    ●支払い合計: ${cost}円<br>
-    (内訳:材料費(${currentTurn===1?ingredientCost:0}円)+家賃(${rent-(econ.rentUp||0)}円)+利子(${thisTurnInterest}円)+諸費用(${otherCost}円))<br>
-    ●天気: ${weather.name}(倍率:${weather.multiplier})<br>
-    ●経済イベント: ${econ.name} <button onclick="showEventDesc('${econ.desc}')">説明</button><br>
-    ●販売皿数:${sales}皿`;
+    info.innerHTML = `<strong>${currentTurn}ターン目の結果</strong><br>
+    天気: ${weather.name}<br>
+    経済イベント: ${econ.name} <button onclick="showEventDesc('${econ.desc}')">説明</button><br><br>
+    今回支払い合計: ${cost}円<br>
+    (材料費:${mat}円 家賃:${rentCost}円 返済:${repay}円 利子:${inter}円 諸費用:${other}円)<br><br>
+    販売皿数: ${sales}皿<br>
+    売上: ${salesAmount}円${mode==="cashless"?"(※次ターン入金(5%手数料後))":""}<br><br>
+    <strong>選んだ材料:</strong><br>${selectedIngredients.join(", ")}<br>
+    1皿:${pricePerDish}円`;
     controlsElement.appendChild(info);
 
     const salesDetailBtn = document.createElement("button");
@@ -360,10 +406,12 @@ function processTurn() {
     function updateSalesDetail(sales, priceAdjust, weather, econ, salesAmount) {
         if (showSalesDetail) {
             salesDetailP.innerHTML = `売上計算式:<br>
-            基本100皿 + 価格差調整(${priceAdjust}皿) = ${100+priceAdjust}皿<br>
-            天気倍率 ×${weather.multiplier}<br>
-            経済イベント調整:${econ.salesMod||0}皿<br>
-            広報モード:${prMode?"+10%": "なし"}<br>
+            基本皿数:100皿<br>
+            価格差調整:${priceAdjust}皿<br>
+            天気倍率×${weather.multiplier}<br>
+            経済イベント:${econ.salesMod||0}皿${econMode===false?"(OFFなので影響なし)":""}<br>
+            広報モード:${prMode?"+10%":"なし"}<br>
+            キャッシュレスモード:${mode==="cashless"?"+5%":"なし"}<br><br>
             最終販売数:${sales}皿<br>
             売上= ${sales}皿 × ${pricePerDish}円 = ${salesAmount}円<br>
             ${mode==="cash"?"(即時入金)":"(次ターン入金,5%手数料後)"}`;
@@ -378,10 +426,10 @@ function processTurn() {
     });
     controlsElement.appendChild(toggleMoneyBtn);
 
+    recordTurnHistory(currentTurn, weather, econ, sales, salesAmount, money);
+    renderHistory();
+
     const nextBtn = createButton(currentTurn<turnCount?"次のターンへ":"結果を見る", () => {
-        // ターン履歴記録
-        recordTurnHistory(currentTurn, weather, econ, sales, salesAmount, money);
-        renderHistory();
         nextTurn();
     });
     controlsElement.appendChild(nextBtn);
@@ -398,7 +446,7 @@ function endGame() {
 function updateSelectedInfo() {
     selectedInfoElement.classList.remove("hidden");
     selectedInfoElement.innerHTML = `<strong>選択した材料:</strong><br>${selectedIngredients.join(", ")}<br>
-    材料合計:${ingredientCost}円 / 1皿:${pricePerDish}円`;
+    (材料費は1ターン目に10,000円として計上) 1皿:${pricePerDish}円`;
 }
 
 function recordTurnHistory(turn, weather, econ, sales, salesAmount, moneyEnd) {

@@ -7,7 +7,7 @@ body {
 h1 {
     text-align: center;
     color: #333;
-    font-size: 1.5em;
+    font-size: 1.8em;
     margin-bottom: 20px;
 }
 
@@ -23,9 +23,10 @@ h1 {
 }
 
 #status {
-    font-size: 1.1em;
+    font-size: 1.2em;
     margin-bottom: 15px;
     color: #333;
+    font-weight:bold;
 }
 
 #selected-info {
@@ -33,7 +34,7 @@ h1 {
     padding:10px;
     border-radius:8px;
     margin-bottom:15px;
-    font-size:14px;
+    font-size:16px;
 }
 
 #controls, #history {
@@ -61,13 +62,25 @@ p, label {
     margin-bottom: 10px;
     line-height: 1.4;
     color: #444;
-    font-size: 14px;
+    font-size: 16px;
 }
 
 input[type="number"] {
-    width:60px;
-    font-size:14px;
+    width:80px;
+    font-size:16px;
     margin-left:5px;
+    padding:4px;
+}
+
+select {
+    font-size:16px;
+    margin-left:5px;
+    padding:4px;
+}
+
+input[type="checkbox"] {
+    transform: scale(1.5);
+    margin:5px;
 }
 
 .hidden {
@@ -77,6 +90,7 @@ input[type="number"] {
 #ingredients-list label {
     display: block;
     margin-bottom:5px;
+    font-size:16px;
 }
 
 #modal {
@@ -105,11 +119,8 @@ input[type="number"] {
     padding:0;
     margin-left:10px;
     vertical-align:middle;
-}
-
-.eye-btn img {
-    width:24px;
-    height:24px;
+    font-size:16px;
+    color:#333;
 }
 
 #history {
